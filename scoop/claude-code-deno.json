@@ -14,5 +14,21 @@
       "extract_dir": "claude-code"
     }
   },
-  "bin": "claude.cmd"
+  "bin": "claude.cmd",
+  "checkver": {
+    "github": "https://github.com/li-ruijie/claude-code",
+    "regex": "claude-code-v([\\d.]+)-deno-v([\\d.]+)"
+  },
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/li-ruijie/claude-code/releases/download/claude-code-v$version-deno-v$match2/claude-code-v$version-deno-v$match2-win-x64.zip",
+        "extract_dir": "claude-code"
+      },
+      "arm64": {
+        "url": "https://github.com/li-ruijie/claude-code/releases/download/claude-code-v$version-deno-v$match2/claude-code-v$version-deno-v$match2-win-arm64.zip",
+        "extract_dir": "claude-code"
+      }
+    }
+  }
 }
