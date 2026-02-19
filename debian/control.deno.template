@@ -1,0 +1,11 @@
+Package: claude-code-deno
+Version: {{CC_VER}}
+Section: devel
+Priority: optional
+Architecture: {{ARCH}}
+Installed-Size: {{SIZE_KB}}
+Maintainer: {{MAINTAINER}}
+Description: Claude Code (Deno) - Anthropic's CLI for Claude
+ Self-contained bundle with Deno {{DENO_VER}}.
+Homepage: https://github.com/anthropics/claude-code
+Conflicts: claude-code

@@ -1,0 +1,10 @@
+Package: claude-code
+Version: {{CC_VER}}
+Section: devel
+Priority: optional
+Architecture: {{ARCH}}
+Installed-Size: {{SIZE_KB}}
+Maintainer: {{MAINTAINER}}
+Description: Claude Code - Anthropic's CLI for Claude
+ Self-contained bundle with Node.js {{NODE_VER}}.
+Homepage: https://github.com/anthropics/claude-code

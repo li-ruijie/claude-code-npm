@@ -1,0 +1,10 @@
+@echo off
+setlocal
+set "SCRIPT_DIR=%~dp0"
+set "PATH=%SCRIPT_DIR%node;%PATH%"
+set "CLAUDE_CONFIG_DIR=%USERPROFILE%\.config"
+set "CLAUDE_CONFIG_FILE=%CLAUDE_CONFIG_DIR%\.claude.json"
+set "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
+set "CLAUDE_CODE_ENABLE_TELEMETRY=0"
+"%SCRIPT_DIR%node\node.exe" "%SCRIPT_DIR%node_modules\@anthropic-ai\claude-code\cli.js" %*
+endlocal

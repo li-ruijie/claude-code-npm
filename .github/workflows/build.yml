@@ -1,0 +1,384 @@
+name: Build and Release Claude Code
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  # -------------------------------------------------------------------
+  # Check for new versions
+  # -------------------------------------------------------------------
+  check-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      cc_version: ${{ steps.versions.outputs.cc_version }}
+      node_version: ${{ steps.versions.outputs.node_version }}
+      deno_version: ${{ steps.versions.outputs.deno_version }}
+      node_needs_build: ${{ steps.versions.outputs.node_needs_build }}
+      deno_needs_build: ${{ steps.versions.outputs.deno_needs_build }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - id: versions
+        run: |
+          # Fetch latest claude-code version from npm
+          CC_LATEST=$(npm view @anthropic-ai/claude-code version)
+          echo "Latest claude-code: $CC_LATEST"
+
+          # Fetch latest Node.js LTS version
+          NODE_LATEST=$(curl -fsSL https://nodejs.org/dist/index.json | \
+            jq -r '[.[] | select(.lts != false)] | first | .version' | sed 's/^v//')
+          echo "Latest Node LTS: $NODE_LATEST"
+
+          # Fetch latest Deno version
+          DENO_LATEST=$(curl -fsSL https://api.github.com/repos/denoland/deno/releases/latest | \
+            jq -r '.tag_name' | sed 's/^v//')
+          echo "Latest Deno: $DENO_LATEST"
+
+          # Read current tracked versions
+          CC_CURRENT=$(jq -r '.["claude-code"]' versions.json)
+          NODE_CURRENT=$(jq -r '.node' versions.json)
+          DENO_CURRENT=$(jq -r '.deno' versions.json)
+
+          echo "Current tracked: cc=$CC_CURRENT node=$NODE_CURRENT deno=$DENO_CURRENT"
+
+          # Determine if builds are needed
+          NODE_NEEDS_BUILD=false
+          DENO_NEEDS_BUILD=false
+
+          if [[ "$CC_LATEST" != "$CC_CURRENT" || "$NODE_LATEST" != "$NODE_CURRENT" ]]; then
+            NODE_NEEDS_BUILD=true
+          fi
+          if [[ "$CC_LATEST" != "$CC_CURRENT" || "$DENO_LATEST" != "$DENO_CURRENT" ]]; then
+            DENO_NEEDS_BUILD=true
+          fi
+
+          echo "cc_version=$CC_LATEST" >> "$GITHUB_OUTPUT"
+          echo "node_version=$NODE_LATEST" >> "$GITHUB_OUTPUT"
+          echo "deno_version=$DENO_LATEST" >> "$GITHUB_OUTPUT"
+          echo "node_needs_build=$NODE_NEEDS_BUILD" >> "$GITHUB_OUTPUT"
+          echo "deno_needs_build=$DENO_NEEDS_BUILD" >> "$GITHUB_OUTPUT"
+
+          echo "Node needs build: $NODE_NEEDS_BUILD"
+          echo "Deno needs build: $DENO_NEEDS_BUILD"
+
+  # -------------------------------------------------------------------
+  # Build matrix
+  # -------------------------------------------------------------------
+  build-node:
+    needs: check-versions
+    if: needs.check-versions.outputs.node_needs_build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target_os: win
+            arch: x64
+          - os: windows-latest
+            target_os: win
+            arch: arm64
+          - os: ubuntu-latest
+            target_os: linux
+            arch: x64
+          - os: ubuntu-24.04-arm
+            target_os: linux
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "lts/*"
+
+      - name: Build
+        shell: bash
+        run: |
+          chmod +x scripts/build.sh
+          scripts/build.sh \
+            --runtime node \
+            --os "${{ matrix.target_os }}" \
+            --arch "${{ matrix.arch }}" \
+            --cc-version "${{ needs.check-versions.outputs.cc_version }}" \
+            --runtime-version "${{ needs.check-versions.outputs.node_version }}" \
+            --output-dir "$GITHUB_WORKSPACE/dist"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: node-${{ matrix.target_os }}-${{ matrix.arch }}
+          path: dist/*
+
+  build-deno:
+    needs: check-versions
+    if: needs.check-versions.outputs.deno_needs_build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target_os: win
+            arch: x64
+          - os: windows-latest
+            target_os: win
+            arch: arm64
+          - os: ubuntu-latest
+            target_os: linux
+            arch: x64
+          - os: ubuntu-24.04-arm
+            target_os: linux
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "lts/*"
+
+      - name: Build
+        shell: bash
+        run: |
+          chmod +x scripts/build.sh
+          scripts/build.sh \
+            --runtime deno \
+            --os "${{ matrix.target_os }}" \
+            --arch "${{ matrix.arch }}" \
+            --cc-version "${{ needs.check-versions.outputs.cc_version }}" \
+            --runtime-version "${{ needs.check-versions.outputs.deno_version }}" \
+            --output-dir "$GITHUB_WORKSPACE/dist"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: deno-${{ matrix.target_os }}-${{ matrix.arch }}
+          path: dist/*
+
+  # -------------------------------------------------------------------
+  # Release Node variant
+  # -------------------------------------------------------------------
+  release-node:
+    needs: [check-versions, build-node]
+    if: needs.check-versions.outputs.node_needs_build == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      CC_VER: ${{ needs.check-versions.outputs.cc_version }}
+      NODE_VER: ${{ needs.check-versions.outputs.node_version }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: node-*
+          path: dist
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lR dist/
+
+      - name: Compute SHA256 hashes
+        id: hashes
+        run: |
+          cd dist
+          for f in *; do
+            hash=$(sha256sum "$f" | cut -d' ' -f1)
+            # Create output-friendly name: replace dots and dashes
+            key=$(echo "$f" | sed 's/[^a-zA-Z0-9]/_/g')
+            echo "${key}=${hash}" >> "$GITHUB_OUTPUT"
+            echo "$hash  $f" >> SHA256SUMS.txt
+          done
+          cat SHA256SUMS.txt
+
+      - name: Determine tag
+        id: tag
+        run: echo "tag=claude-code-v${CC_VER}-node-v${NODE_VER}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate tag format
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          if [[ ! "$TAG" =~ ^claude-code-v[0-9]+\.[0-9]+\.[0-9]+-node-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid tag format: $TAG" >&2
+            exit 1
+          fi
+
+      - name: Create release
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Claude Code v${{ env.CC_VER }} (Node v${{ env.NODE_VER }})
+          body: |
+            Self-contained Claude Code bundle with Node.js runtime.
+
+            | Component | Version |
+            |-----------|---------|
+            | Claude Code | v${{ env.CC_VER }} |
+            | Node.js | v${{ env.NODE_VER }} |
+
+            ## Assets
+            - **Windows x64**: `.zip` — extract and run `claude.cmd`
+            - **Windows arm64**: `.zip` — extract and run `claude.cmd`
+            - **Linux x64**: `.tar.gz` or `.deb`
+            - **Linux arm64**: `.tar.gz` or `.deb`
+
+            See `SHA256SUMS.txt` for checksums.
+          files: dist/*
+          fail_on_unmatched_files: true
+
+      - name: Update versions.json and scoop manifests
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          REPO="${{ github.repository }}"
+
+          # Update versions.json
+          jq --arg cc "$CC_VER" --arg node "$NODE_VER" \
+            '.["claude-code"] = $cc | .node = $node' \
+            versions.json > versions.json.tmp && mv versions.json.tmp versions.json
+
+          # Compute hashes for Windows zips
+          WIN_X64_ZIP="claude-code-v${CC_VER}-node-v${NODE_VER}-win-x64.zip"
+          WIN_ARM64_ZIP="claude-code-v${CC_VER}-node-v${NODE_VER}-win-arm64.zip"
+          HASH_X64=$(grep "$WIN_X64_ZIP" dist/SHA256SUMS.txt | cut -d' ' -f1)
+          HASH_ARM64=$(grep "$WIN_ARM64_ZIP" dist/SHA256SUMS.txt | cut -d' ' -f1)
+
+          # Update scoop manifest
+          jq --arg ver "$CC_VER" \
+             --arg url64 "https://github.com/${REPO}/releases/download/${TAG}/${WIN_X64_ZIP}" \
+             --arg hash64 "$HASH_X64" \
+             --arg urlarm "https://github.com/${REPO}/releases/download/${TAG}/${WIN_ARM64_ZIP}" \
+             --arg hasharm "$HASH_ARM64" \
+             '.version = $ver |
+              .architecture."64bit".url = $url64 |
+              .architecture."64bit".hash = $hash64 |
+              .architecture.arm64.url = $urlarm |
+              .architecture.arm64.hash = $hasharm' \
+             scoop/claude-code-npm.json > scoop/claude-code-npm.json.tmp && \
+             mv scoop/claude-code-npm.json.tmp scoop/claude-code-npm.json
+
+      - name: Commit updated files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add versions.json scoop/claude-code-npm.json
+          if ! git diff --cached --quiet; then
+            git commit -m "release: node v${CC_VER}-node-v${NODE_VER}"
+            git pull --rebase origin main
+            git push
+          fi
+
+  # -------------------------------------------------------------------
+  # Release Deno variant
+  # -------------------------------------------------------------------
+  release-deno:
+    needs: [check-versions, build-deno]
+    if: needs.check-versions.outputs.deno_needs_build == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      CC_VER: ${{ needs.check-versions.outputs.cc_version }}
+      DENO_VER: ${{ needs.check-versions.outputs.deno_version }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: deno-*
+          path: dist
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lR dist/
+
+      - name: Compute SHA256 hashes
+        id: hashes
+        run: |
+          cd dist
+          for f in *; do
+            hash=$(sha256sum "$f" | cut -d' ' -f1)
+            key=$(echo "$f" | sed 's/[^a-zA-Z0-9]/_/g')
+            echo "${key}=${hash}" >> "$GITHUB_OUTPUT"
+            echo "$hash  $f" >> SHA256SUMS.txt
+          done
+          cat SHA256SUMS.txt
+
+      - name: Determine tag
+        id: tag
+        run: echo "tag=claude-code-v${CC_VER}-deno-v${DENO_VER}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate tag format
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          if [[ ! "$TAG" =~ ^claude-code-v[0-9]+\.[0-9]+\.[0-9]+-deno-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid tag format: $TAG" >&2
+            exit 1
+          fi
+
+      - name: Create release
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Claude Code v${{ env.CC_VER }} (Deno v${{ env.DENO_VER }})
+          body: |
+            Self-contained Claude Code bundle with Deno runtime.
+
+            **Note:** Deno compatibility with Claude Code is experimental.
+
+            | Component | Version |
+            |-----------|---------|
+            | Claude Code | v${{ env.CC_VER }} |
+            | Deno | v${{ env.DENO_VER }} |
+
+            ## Assets
+            - **Windows x64**: `.zip` — extract and run `claude.cmd`
+            - **Windows arm64**: `.zip` — extract and run `claude.cmd`
+            - **Linux x64**: `.tar.gz` or `.deb`
+            - **Linux arm64**: `.tar.gz` or `.deb`
+
+            See `SHA256SUMS.txt` for checksums.
+          files: dist/*
+          fail_on_unmatched_files: true
+
+      - name: Update versions.json and scoop manifests
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          REPO="${{ github.repository }}"
+
+          # Update versions.json
+          jq --arg cc "$CC_VER" --arg deno "$DENO_VER" \
+            '.["claude-code"] = $cc | .deno = $deno' \
+            versions.json > versions.json.tmp && mv versions.json.tmp versions.json
+
+          # Compute hashes for Windows zips
+          WIN_X64_ZIP="claude-code-v${CC_VER}-deno-v${DENO_VER}-win-x64.zip"
+          WIN_ARM64_ZIP="claude-code-v${CC_VER}-deno-v${DENO_VER}-win-arm64.zip"
+          HASH_X64=$(grep "$WIN_X64_ZIP" dist/SHA256SUMS.txt | cut -d' ' -f1)
+          HASH_ARM64=$(grep "$WIN_ARM64_ZIP" dist/SHA256SUMS.txt | cut -d' ' -f1)
+
+          # Update scoop manifest
+          jq --arg ver "$CC_VER" \
+             --arg url64 "https://github.com/${REPO}/releases/download/${TAG}/${WIN_X64_ZIP}" \
+             --arg hash64 "$HASH_X64" \
+             --arg urlarm "https://github.com/${REPO}/releases/download/${TAG}/${WIN_ARM64_ZIP}" \
+             --arg hasharm "$HASH_ARM64" \
+             '.version = $ver |
+              .architecture."64bit".url = $url64 |
+              .architecture."64bit".hash = $hash64 |
+              .architecture.arm64.url = $urlarm |
+              .architecture.arm64.hash = $hasharm' \
+             scoop/claude-code-deno.json > scoop/claude-code-deno.json.tmp && \
+             mv scoop/claude-code-deno.json.tmp scoop/claude-code-deno.json
+
+      - name: Commit updated files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add versions.json scoop/claude-code-deno.json
+          if ! git diff --cached --quiet; then
+            git commit -m "release: deno v${CC_VER}-deno-v${DENO_VER}"
+            git pull --rebase origin main
+            git push
+          fi

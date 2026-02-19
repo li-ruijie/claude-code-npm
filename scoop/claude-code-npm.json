@@ -1,0 +1,18 @@
+{
+  "version": "0.0.0",
+  "description": "Claude Code - Anthropic's CLI for Claude (Node.js runtime)",
+  "homepage": "https://github.com/anthropics/claude-code",
+  "architecture": {
+    "64bit": {
+      "url": "",
+      "hash": "",
+      "extract_dir": "claude-code"
+    },
+    "arm64": {
+      "url": "",
+      "hash": "",
+      "extract_dir": "claude-code"
+    }
+  },
+  "bin": "claude.cmd"
+}
