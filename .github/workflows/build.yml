@@ -263,13 +263,33 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Pull latest to avoid conflicts with concurrent deno release
-          git pull --ff-only origin main || git pull --rebase origin main
+          # Fetch and reset to latest remote main (deno release may have pushed)
+          git fetch origin main
+          git reset --hard origin/main
 
-          # Re-apply versions.json update on top of pulled state
+          # Re-apply versions.json and scoop manifest updates on fresh base
           jq --arg cc "$CC_VER" --arg node "$NODE_VER" \
             '.["claude-code"] = $cc | .node = $node' \
             versions.json > versions.json.tmp && mv versions.json.tmp versions.json
+
+          TAG="claude-code-v${CC_VER}-node-v${NODE_VER}"
+          REPO="${{ github.repository }}"
+          WIN_X64_ZIP="claude-code-v${CC_VER}-node-v${NODE_VER}-win-x64.zip"
+          WIN_ARM64_ZIP="claude-code-v${CC_VER}-node-v${NODE_VER}-win-arm64.zip"
+          HASH_X64=$(grep "$WIN_X64_ZIP" dist/SHA256SUMS.txt | cut -d' ' -f1)
+          HASH_ARM64=$(grep "$WIN_ARM64_ZIP" dist/SHA256SUMS.txt | cut -d' ' -f1)
+          jq --arg ver "$CC_VER" \
+             --arg url64 "https://github.com/${REPO}/releases/download/${TAG}/${WIN_X64_ZIP}" \
+             --arg hash64 "$HASH_X64" \
+             --arg urlarm "https://github.com/${REPO}/releases/download/${TAG}/${WIN_ARM64_ZIP}" \
+             --arg hasharm "$HASH_ARM64" \
+             '.version = $ver |
+              .architecture."64bit".url = $url64 |
+              .architecture."64bit".hash = $hash64 |
+              .architecture.arm64.url = $urlarm |
+              .architecture.arm64.hash = $hasharm' \
+             scoop/claude-code-npm.json > scoop/claude-code-npm.json.tmp && \
+             mv scoop/claude-code-npm.json.tmp scoop/claude-code-npm.json
 
           git add versions.json scoop/claude-code-npm.json
           if ! git diff --cached --quiet; then
@@ -385,13 +405,33 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Pull latest to avoid conflicts with concurrent node release
-          git pull --ff-only origin main || git pull --rebase origin main
+          # Fetch and reset to latest remote main (node release may have pushed)
+          git fetch origin main
+          git reset --hard origin/main
 
-          # Re-apply versions.json update on top of pulled state
+          # Re-apply versions.json and scoop manifest updates on fresh base
           jq --arg cc "$CC_VER" --arg deno "$DENO_VER" \
             '.["claude-code"] = $cc | .deno = $deno' \
             versions.json > versions.json.tmp && mv versions.json.tmp versions.json
+
+          TAG="claude-code-v${CC_VER}-deno-v${DENO_VER}"
+          REPO="${{ github.repository }}"
+          WIN_X64_ZIP="claude-code-v${CC_VER}-deno-v${DENO_VER}-win-x64.zip"
+          WIN_ARM64_ZIP="claude-code-v${CC_VER}-deno-v${DENO_VER}-win-arm64.zip"
+          HASH_X64=$(grep "$WIN_X64_ZIP" dist/SHA256SUMS.txt | cut -d' ' -f1)
+          HASH_ARM64=$(grep "$WIN_ARM64_ZIP" dist/SHA256SUMS.txt | cut -d' ' -f1)
+          jq --arg ver "$CC_VER" \
+             --arg url64 "https://github.com/${REPO}/releases/download/${TAG}/${WIN_X64_ZIP}" \
+             --arg hash64 "$HASH_X64" \
+             --arg urlarm "https://github.com/${REPO}/releases/download/${TAG}/${WIN_ARM64_ZIP}" \
+             --arg hasharm "$HASH_ARM64" \
+             '.version = $ver |
+              .architecture."64bit".url = $url64 |
+              .architecture."64bit".hash = $hash64 |
+              .architecture.arm64.url = $urlarm |
+              .architecture.arm64.hash = $hasharm' \
+             scoop/claude-code-deno.json > scoop/claude-code-deno.json.tmp && \
+             mv scoop/claude-code-deno.json.tmp scoop/claude-code-deno.json
 
           git add versions.json scoop/claude-code-deno.json
           if ! git diff --cached --quiet; then
