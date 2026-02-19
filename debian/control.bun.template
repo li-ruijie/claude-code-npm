@@ -1,0 +1,11 @@
+Package: claude-code-bun
+Version: {{CC_VER}}
+Section: devel
+Priority: optional
+Architecture: {{ARCH}}
+Installed-Size: {{SIZE_KB}}
+Maintainer: {{MAINTAINER}}
+Description: Claude Code (Bun) - Anthropic's CLI for Claude
+ Self-contained bundle with Bun {{BUN_VER}}.
+Homepage: https://github.com/anthropics/claude-code
+Conflicts: claude-code, claude-code-deno

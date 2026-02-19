@@ -1,0 +1,25 @@
+{
+  "version": "0.0.0",
+  "description": "Claude Code (Bun) - Anthropic's CLI for Claude (Bun runtime)",
+  "homepage": "https://github.com/anthropics/claude-code",
+  "architecture": {
+    "64bit": {
+      "url": "",
+      "hash": "",
+      "extract_dir": "claude-code"
+    }
+  },
+  "bin": "claude.cmd",
+  "checkver": {
+    "github": "https://github.com/li-ruijie/claude-code",
+    "regex": "claude-code-v([\\d.]+)-bun-v([\\d.]+)"
+  },
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/li-ruijie/claude-code/releases/download/claude-code-v$version-bun-v$match2/claude-code-v$version-bun-v$match2-win-x64.zip",
+        "extract_dir": "claude-code"
+      }
+    }
+  }
+}

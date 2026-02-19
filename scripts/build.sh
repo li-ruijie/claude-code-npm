@@ -57,8 +57,8 @@ mkdir -p "$BUNDLE_DIR"
 
 # Map arch names
 case "$ARCH" in
-  x64)   NODE_ARCH="x64";     DENO_ARCH="x86_64"; DEB_ARCH="amd64" ;;
-  arm64) NODE_ARCH="arm64";   DENO_ARCH="aarch64"; DEB_ARCH="arm64" ;;
+  x64)   NODE_ARCH="x64";     DENO_ARCH="x86_64"; BUN_ARCH="x64";      DEB_ARCH="amd64" ;;
+  arm64) NODE_ARCH="arm64";   DENO_ARCH="aarch64"; BUN_ARCH="aarch64"; DEB_ARCH="arm64" ;;
   *) echo "Unsupported arch: $ARCH" >&2; exit 1 ;;
 esac
 
@@ -112,6 +112,26 @@ elif [[ "$RUNTIME" == "deno" ]]; then
   else
     unzip -q "$BUILD_DIR/deno.zip" "deno" -d "$RUNTIME_DIR"
     chmod +x "$RUNTIME_DIR/deno"
+  fi
+
+elif [[ "$RUNTIME" == "bun" ]]; then
+  RUNTIME_DIR="$BUNDLE_DIR/bun"
+  mkdir -p "$RUNTIME_DIR"
+
+  if [[ "$TARGET_OS" == "win" ]]; then
+    BUN_ZIP="bun-windows-${BUN_ARCH}.zip"
+  else
+    BUN_ZIP="bun-linux-${BUN_ARCH}.zip"
+  fi
+  BUN_URL="https://github.com/oven-sh/bun/releases/download/bun-v${RUNTIME_VERSION}/${BUN_ZIP}"
+  echo "Downloading $BUN_URL"
+  curl -fsSL -o "$BUILD_DIR/bun.zip" "$BUN_URL"
+
+  if [[ "$TARGET_OS" == "win" ]]; then
+    unzip -q -j "$BUILD_DIR/bun.zip" "*/bun.exe" -d "$RUNTIME_DIR"
+  else
+    unzip -q -j "$BUILD_DIR/bun.zip" "*/bun" -d "$RUNTIME_DIR"
+    chmod +x "$RUNTIME_DIR/bun"
   fi
 fi
 
@@ -191,11 +211,7 @@ rm -f "$BUNDLE_DIR/package.json"
 # ---------------------------------------------------------------------------
 echo "--- Creating archive ---"
 
-if [[ "$RUNTIME" == "node" ]]; then
-  ARCHIVE_BASE="claude-code-v${CC_VERSION}-node-v${RUNTIME_VERSION}-${TARGET_OS}-${ARCH}"
-else
-  ARCHIVE_BASE="claude-code-v${CC_VERSION}-deno-v${RUNTIME_VERSION}-${TARGET_OS}-${ARCH}"
-fi
+ARCHIVE_BASE="claude-code-v${CC_VERSION}-${RUNTIME}-v${RUNTIME_VERSION}-${TARGET_OS}-${ARCH}"
 
 if [[ "$TARGET_OS" == "win" ]]; then
   ARCHIVE_NAME="${ARCHIVE_BASE}.zip"
@@ -214,17 +230,23 @@ echo "Created: $OUTPUT_DIR/$ARCHIVE_NAME"
 if [[ "$TARGET_OS" == "linux" ]]; then
   echo "--- Building .deb package ---"
 
-  if [[ "$RUNTIME" == "node" ]]; then
-    DEB_PKG_NAME="claude-code"
-    DEB_NAME="claude-code_${CC_VERSION}-node${RUNTIME_VERSION}_${DEB_ARCH}.deb"
-    TEMPLATE="$REPO_ROOT/debian/control.node.template"
-    RT_VER_LABEL="NODE_VER"
-  else
-    DEB_PKG_NAME="claude-code-deno"
-    DEB_NAME="claude-code-deno_${CC_VERSION}-deno${RUNTIME_VERSION}_${DEB_ARCH}.deb"
-    TEMPLATE="$REPO_ROOT/debian/control.deno.template"
-    RT_VER_LABEL="DENO_VER"
-  fi
+  case "$RUNTIME" in
+    node)
+      DEB_PKG_NAME="claude-code"
+      DEB_NAME="claude-code_${CC_VERSION}-node${RUNTIME_VERSION}_${DEB_ARCH}.deb"
+      TEMPLATE="$REPO_ROOT/debian/control.node.template"
+      RT_VER_LABEL="NODE_VER" ;;
+    deno)
+      DEB_PKG_NAME="claude-code-deno"
+      DEB_NAME="claude-code-deno_${CC_VERSION}-deno${RUNTIME_VERSION}_${DEB_ARCH}.deb"
+      TEMPLATE="$REPO_ROOT/debian/control.deno.template"
+      RT_VER_LABEL="DENO_VER" ;;
+    bun)
+      DEB_PKG_NAME="claude-code-bun"
+      DEB_NAME="claude-code-bun_${CC_VERSION}-bun${RUNTIME_VERSION}_${DEB_ARCH}.deb"
+      TEMPLATE="$REPO_ROOT/debian/control.bun.template"
+      RT_VER_LABEL="BUN_VER" ;;
+  esac
 
   DEB_ROOT="$BUILD_DIR/${DEB_PKG_NAME}_${CC_VERSION}"
   mkdir -p "$DEB_ROOT/DEBIAN"
