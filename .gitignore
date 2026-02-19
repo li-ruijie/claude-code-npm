@@ -1,7 +1,6 @@
 # Build artifacts
-repo/
-claude/
 build/
+dist/
 *.zip
 *.tar.gz
 *.deb
