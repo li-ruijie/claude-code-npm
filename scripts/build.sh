@@ -203,6 +203,10 @@ else
   chmod +x "$BUNDLE_DIR/claude"
 fi
 
+if [[ "$RUNTIME" == "deno" ]]; then
+  cp "$REPO_ROOT/templates/deno-shim.js" "$BUNDLE_DIR/deno-shim.js"
+fi
+
 # Remove package.json (not needed at runtime)
 rm -f "$BUNDLE_DIR/package.json"
 
