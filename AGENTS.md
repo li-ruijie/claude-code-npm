@@ -71,6 +71,16 @@ Release jobs fetch+reset to latest remote main before committing to handle concu
 - Deno: `claude-code-v{CC}-deno-v{DENO}` (e.g. `claude-code-v2.1.47-deno-v2.6.10`)
 - Bun: `claude-code-v{CC}-bun-v{BUN}` (e.g. `claude-code-v2.1.47-bun-v1.3.9`)
 
+## Force Triggering a Rebuild
+
+The CI only builds when `check-versions` detects a version mismatch between `versions.json` and the latest upstream releases. To force a rebuild for a specific runtime (e.g. after a template fix):
+
+1. Set the runtime's version in `versions.json` to `"0"` (e.g. `"deno": "0"`). Leave other runtimes unchanged to avoid unnecessary rebuilds.
+2. Commit and push.
+3. Trigger the workflow: `gh workflow run build.yml`
+
+The release job will restore `versions.json` to the actual version after a successful build.
+
 ## Conventions
 
 - All GitHub Actions pinned to full commit SHAs.
