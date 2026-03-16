@@ -96,6 +96,7 @@ jobs:
         with:
           name: node-${{ matrix.target_os }}-${{ matrix.arch }}
           path: dist/*
+          retention-days: 1
 
   # -------------------------------------------------------------------
   # Release
