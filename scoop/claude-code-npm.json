@@ -5,12 +5,12 @@
   "architecture": {
     "64bit": {
       "url": "https://github.com/li-ruijie/claude-code/releases/download/claude-code-v2.1.114-node-v24.15.0/claude-code-v2.1.114-node-v24.15.0-win-x64.zip",
-      "hash": "86a63588479877a59a9dc75704be43dca4aabaca2eaccfe92d74686960a6796c",
+      "hash": "384c1b9bd85c5db77e953f48a1f2f560948c6f4dd9ba171b3f631db5313f860c",
       "extract_dir": "claude-code"
     },
     "arm64": {
       "url": "https://github.com/li-ruijie/claude-code/releases/download/claude-code-v2.1.114-node-v24.15.0/claude-code-v2.1.114-node-v24.15.0-win-arm64.zip",
-      "hash": "9b4a7a2fb81cf9d5651d60c4e47b0c7fd2e236b7b44bd5a3118650875cd2fb49",
+      "hash": "9b253720753228250cf73e5b9f0b0408e48efcaa0b6d7c3761c2c3b16bf70db7",
       "extract_dir": "claude-code"
     }
   },
